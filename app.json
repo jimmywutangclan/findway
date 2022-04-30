@@ -1,0 +1,11 @@
+{
+  "expo": {
+    "name": "DragonHacks",
+    "slug": "DragonHacks",
+    "version": "1.0.0",
+    "assetBundlePatterns": [
+      "**/*"
+    ]
+  },
+  "name": "DragonHacks"
+}
