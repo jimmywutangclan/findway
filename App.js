@@ -50,7 +50,7 @@ export default class App extends React.Component {
       `keyword=${this.state.keyword}` +
       `&location=${this.state.latitude}%2C${this.state.longitude}` +
       `&radius=${this.state.radius}` +
-      `&key=${process.env.GOOGLE_API_KEY}`
+      `&key=${GOOGLE_API_KEY}`
     )
       .then(res => {
         this.setState({ data: res.data.results.map(result => result.name) });
