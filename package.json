@@ -9,13 +9,23 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@react-native-community/geolocation": "^2.0.2",
     "expo": "~44.0.2",
+    "expo-location": "~14.0.1",
     "expo-splash-screen": "~0.14.1",
     "expo-status-bar": "~1.2.0",
+    "haversine": "^1.1.1",
     "react": "17.0.1",
     "react-dom": "17.0.1",
     "react-native": "0.64.3",
-    "react-native-web": "0.17.1"
+    "react-native-app-intro-slider": "^4.0.4",
+    "react-native-appearance": "^0.3.4",
+    "react-native-config": "^1.4.5",
+    "react-native-map-clustering": "^3.4.2",
+    "react-native-maps": "0.29.4",
+    "react-native-unimodules": "~0.15.0",
+    "react-native-web": "0.17.1",
+    "react-native-web-maps": "^0.1.0"
   },
   "devDependencies": {
     "@babel/core": "^7.12.9"
