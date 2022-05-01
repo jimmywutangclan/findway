@@ -1,29 +1,31 @@
 import React from 'react';
-import { StyleSheet, Text, TextInput, View, Dimensions, TouchableOpacity } from 'react-native';
+import { Text, TextInput, View, Modal, SectionList } from 'react-native';
 import MapView, { AnimatedRegion, Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
+import axios from 'axios';
+import styles from './styles';
 
-let LATITUDE = 39.9526;
-let LONGITUDE = 75.1652;
-let LATITUDE_DELTA = 0.05;
-let LONGITUDE_DELTA = 0.05;
+const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
+const GOOGLE_API_PREFIX = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json?';
 
 export default class App extends React.Component {
   constructor(props) {
     super(props);
-
     this.state = {
+      // json payloads
       keyword: '',
+      data: {},
       // for the map view
-      latitude: LATITUDE,
-      longitude: LONGITUDE,
+      latitude: 39.9526,
+      longitude: 75.1652,
+      radius: 5000,
       routeCoordinates: [],
-      prevLatLng: {},
+      prevLatLong: {},
       coordinate: new AnimatedRegion({
-        latitude: LATITUDE,
-        longitude: LONGITUDE,
-        latitudeDelta: LATITUDE_DELTA,
-        longitudeDelta: LONGITUDE_DELTA,
+        latitude: 39.9526,
+        longitude: 75.1652,
+        latitudeDelta: 0.05,
+        longitudeDelta: 0.05,
       })
     };
   }
@@ -31,18 +33,39 @@ export default class App extends React.Component {
   getMapRegion = () => ({
     latitude: this.state.latitude,
     longitude: this.state.longitude,
-    latitudeDelta: LATITUDE_DELTA,
-    longitudeDelta: LONGITUDE_DELTA
+    latitudeDelta: 0.05,
+    longitudeDelta: 0.05
   });
 
-  async componentDidMount() {
-    const { status } = Location.requestForegroundPermissionsAsync();
+  // text is the text from the query
+  updateKeyword = text => {
+    this.setState({ keyword: text });
+  };
 
-    this.watchID = await Location.watchPositionAsync({ accuracy: 6 },
+  fetchNearbyAreas = () => {
+    // res.data.results is where the actually relevant information/data is
+    // good to note above
+    // data.name is a placeholder for the specific context, replace with whatever we mean to actually use
+    axios.get(GOOGLE_API_PREFIX +
+      `keyword=${this.state.keyword}` +
+      `&location=${this.state.latitude}%2C${this.state.longitude}` +
+      `&radius=${this.state.radius}` +
+      `&key=${process.env.GOOGLE_API_KEY}`
+    )
+      .then(res => {
+        this.setState({ data: res.data.results.map(result => result.name) });
+      })
+      .catch(err => console.log(`Did not get data: ${err.message}`));
+  };
+
+  async componentDidMount() {
+    Location.requestForegroundPermissionsAsync();
+
+    this.watchID = await Location.watchPositionAsync(
+      { accuracy: 6 },
       position => {
         const { coordinate, routeCoordinates } = this.state;
         const { latitude, longitude } = position.coords;
-
         const newCoordinate = {
           latitude,
           longitude
@@ -56,53 +79,58 @@ export default class App extends React.Component {
           latitudeDelta: latitude - this.state.latitude,
           longitudeDelta: longitude - this.state.longitude,
           routeCoordinates: routeCoordinates.concat([newCoordinate]),
-          prevLatLng: newCoordinate
+          prevLatLong: newCoordinate
         });
       }
     );
   }
 
   componentWillUnmount() {
-    this.watchID.remove();
+    if (this.watchID) {
+      this.watchID.remove();
+    }
   }
 
   render() {
     return (
       <View style={styles.container}>
-        <Text>This is our app for DragonHacks!</Text>
-        <Text>What are you looking for?</Text>
-        <TextInput style={{ height: 40 }} placeholder="Type here to find!" onChangeText={newText => this.setState({ keyword: newText })} />
-        <Text>Helping you find {this.state.keyword}</Text>
-
-        <MapView
-          style={styles.map}
-          showUserLocation
-          followUserLocation
-          loadingEnabled
-          region={this.getMapRegion()}
+        {/* <Text>This is our app for DragonHacks!</Text> */}
+        <Modal
+          transparent={true}
+          visible={this.state.show}
         >
-          <Marker.Animated
-            ref={marker => {
-              this.marker = marker;
-            }}
-            coordinate={this.state.coordinate}
-          />
-        </MapView>
+          <View style={styles.mainView}>
+            <Text style={styles.title}>FindWay</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Type here to find!"
+              onChangeText={this.updateKeyword}
+              onSubmitEditing={this.fetchNearbyAreas}
+            />
+            <Text>Helping you find {this.state.keyword}</Text>
+            <MapView
+              style={styles.map}
+              showUserLocation
+              followUserLocation
+              loadingEnabled
+              region={this.getMapRegion()}
+            >
+              <Marker.Animated
+                ref={marker => this.marker = marker}
+                coordinate={this.state.coordinate}
+              />
+            </MapView>
+            <SectionList
+              sections={[
+                { title: '1', data: this.state.data },
+              ]}
+              renderItem={({ item }) => <Text>{`\u2022 ${item}`}</Text> }
+              renderSectionHeader={({ section }) => <Text style={styles.sectionHeader}>{section.title}</Text>}
+              keyExtractor={(_, index) => index}
+            />
+          </View>
+        </Modal>
       </View>
     );
   }
 }
-
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#4287f5',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  map: {
-    width: Dimensions.get('window').width,
-    height: Dimensions.get('window').height / 2,
-  }
-});
