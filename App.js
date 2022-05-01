@@ -1,35 +1,50 @@
+// App.js
+// Referenced: https://medium.com/quick-code/react-native-location-tracking-14ab2c9e2db8
 import React from 'react';
-import { Text, TextInput, View, Modal, SectionList } from 'react-native';
+import { Text, View, Modal, FlatList, TouchableOpacity } from 'react-native';
 import MapView, { AnimatedRegion, Marker } from 'react-native-maps';
+
+import * as Device from 'expo-device';
 import * as Location from 'expo-location';
+import AppLoading from 'expo-app-loading';
+import * as SplashScreen from 'expo-splash-screen';
+import * as Font from "expo-font";
+import { Inter_900Black } from '@expo-google-fonts/inter';
+
 import axios from 'axios';
 import styles from './styles';
 
 const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
 const GOOGLE_API_PREFIX = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json?';
 
+console.disableYellowBox = true;
+
 export default class App extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
-      // json payloads
-      keyword: '',
-      data: {},
+      names: [],
+      nearby: [],
       // for the map view
       latitude: 39.9526,
       longitude: 75.1652,
       radius: 5000,
-      routeCoordinates: [],
       prevLatLong: {},
       coordinate: new AnimatedRegion({
         latitude: 39.9526,
         longitude: 75.1652,
         latitudeDelta: 0.05,
         longitudeDelta: 0.05,
-      })
+      }),
+      // for fonts
+      isLoaded: false
     };
   }
+  
+  // JS doesn’t have a built-in sleep function
+  sleep = time => new Promise(resolve => setTimeout(resolve, time))
 
+  // returns necessary location coordinates
   getMapRegion = () => ({
     latitude: this.state.latitude,
     longitude: this.state.longitude,
@@ -37,39 +52,48 @@ export default class App extends React.Component {
     longitudeDelta: 0.05
   });
 
-  // text is the text from the query
-  updateKeyword = text => {
-    this.setState({ keyword: text });
-  };
-
-  fetchNearbyAreas = () => {
+  fetchNearbyAreas = keyword => {
     // res.data.results is where the actually relevant information/data is
     // good to note above
     // data.name is a placeholder for the specific context, replace with whatever we mean to actually use
     axios.get(GOOGLE_API_PREFIX +
-      `keyword=${this.state.keyword}` +
+      `keyword=${keyword}` +
       `&location=${this.state.latitude}%2C${this.state.longitude}` +
       `&radius=${this.state.radius}` +
       `&key=${GOOGLE_API_KEY}`
     )
       .then(res => {
-        this.setState({ data: res.data.results.map(result => result.name) });
+        const results = res.data.results;
+        const names = results.map(result => result.name);
+        const nearby = results.map(result => result.geometry.location);
+        this.setState({ names, nearby });
       })
-      .catch(err => console.log(`Did not get data: ${err.message}`));
+      .catch(err => {
+        console.log(`Did not get data: ${err.message}`);
+      });
+
+    this.sleep(10000).then(() => { }).catch(err => console.log('Sleep failed: ' + err.message));
+  };
+
+  // create a helper function to load the font 
+  loadFontsAsync = async () => {
+    await Font.loadAsync({
+      Inter_900Black
+    });
+    this.setState({ isLoaded: true });
   };
 
   async componentDidMount() {
-    Location.requestForegroundPermissionsAsync();
+    await this.loadFontsAsync();
+    await SplashScreen.hideAsync();
+    await Location.requestForegroundPermissionsAsync();
 
     this.watchID = await Location.watchPositionAsync(
       { accuracy: 6 },
-      position => {
-        const { coordinate, routeCoordinates } = this.state;
+      async position => {
+        const { coordinate } = this.state;
         const { latitude, longitude } = position.coords;
-        const newCoordinate = {
-          latitude,
-          longitude
-        };
+        const newCoordinate = { latitude, longitude };
 
         coordinate.timing(newCoordinate).start();
 
@@ -78,36 +102,35 @@ export default class App extends React.Component {
           longitude,
           latitudeDelta: latitude - this.state.latitude,
           longitudeDelta: longitude - this.state.longitude,
-          routeCoordinates: routeCoordinates.concat([newCoordinate]),
           prevLatLong: newCoordinate
         });
+
+        console.log(`Refreshing location for ${Device.deviceName}...`)
+        await this.fetchNearbyAreas('Gardens');
       }
     );
   }
 
-  componentWillUnmount() {
+  async componentWillUnmount() {
     if (this.watchID) {
-      this.watchID.remove();
+      await this.watchID.remove();
     }
   }
 
   render() {
+    if (!this.state.isLoaded) {
+      console.log('Loading...');
+      return <AppLoading style={styles.stretch} />;
+    }
+
     return (
       <View style={styles.container}>
-        {/* <Text>This is our app for DragonHacks!</Text> */}
         <Modal
           transparent={true}
           visible={this.state.show}
         >
           <View style={styles.mainView}>
             <Text style={styles.title}>FindWay</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Type here to find!"
-              onChangeText={this.updateKeyword}
-              onSubmitEditing={this.fetchNearbyAreas}
-            />
-            <Text>Helping you find {this.state.keyword}</Text>
             <MapView
               style={styles.map}
               showUserLocation
@@ -119,13 +142,26 @@ export default class App extends React.Component {
                 ref={marker => this.marker = marker}
                 coordinate={this.state.coordinate}
               />
+              {
+                this.state.nearby.map(({ lat, lng }, index) =>
+                  <Marker
+                    key={index}
+                    coordinate={{ latitude: lat, longitude: lng }}
+                    title={this.state.names[index]}
+                    pinColor={'#6a8768'}
+                  />)
+              }
             </MapView>
-            <SectionList
-              sections={[
-                { title: '1', data: this.state.data },
-              ]}
-              renderItem={({ item }) => <Text>{`\u2022 ${item}`}</Text> }
-              renderSectionHeader={({ section }) => <Text style={styles.sectionHeader}>{section.title}</Text>}
+            <FlatList
+              style={{ flex: 1 }}
+              data={this.state.names}
+              renderItem={({ item }) =>
+                <View style={styles.listItem}>
+                  <TouchableOpacity style={{ justifyContent: "center", alignItems: "center", flex: 1 }}>
+                    <Text>{item}</Text>
+                  </TouchableOpacity>
+                </View>
+              }
               keyExtractor={(_, index) => index}
             />
           </View>
